@@ -13,8 +13,10 @@
 package mockhouse
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"reflect"
 	"time"
 
@@ -69,6 +71,16 @@ type ClickConnMockCommon interface {
 	// ExpectAsyncInsert expects *driver.Conn.AsyncInsert to be called.
 	// the *ExpectedAsyncInsert allows to mock database response
 	ExpectAsyncInsert(expectedSQL string, expectedWait bool) *ExpectedAsyncInsert
+
+	// ExpectQueryFormat expects *driver.Conn.QueryFormat to be called
+	// with expectedFormat and expectedSQL query.
+	// the *ExpectedQueryFormat allows to mock database response
+	ExpectQueryFormat(expectedFormat, expectedSQL string) *ExpectedQueryFormat
+
+	// ExpectInsertFormat expects *driver.Conn.InsertFormat to be called
+	// with expectedFormat and expectedSQL query.
+	// the *ExpectedInsertFormat allows to mock database response
+	ExpectInsertFormat(expectedFormat, expectedSQL string) *ExpectedInsertFormat
 
 	// ExpectExec expects Exec() to be called with expectedSQL query.
 	// the *ExpectedExec allows to mock database response
@@ -359,6 +371,169 @@ func (c *clickhousemock) asyncInsert(ctx context.Context, query string, wait boo
 	defer expected.Unlock()
 	if err := c.queryMatcher.Match(expected.expectSQL, query); err != nil {
 		return nil, fmt.Errorf("AsyncInsert: %v", err)
+	}
+
+	expected.triggered = true
+	return expected, expected.err
+}
+
+func (c *clickhousemock) ExpectQueryFormat(expectedFormat, expectedSQL string) *ExpectedQueryFormat {
+	e := &ExpectedQueryFormat{}
+	e.expectFormat = expectedFormat
+	e.expectSQL = expectedSQL
+	c.expected = append(c.expected, e)
+	return e
+}
+
+// QueryFormat meets https://pkg.go.dev/github.com/ClickHouse/clickhouse-go/v2/lib/driver#Conn interface
+func (c *clickhousemock) QueryFormat(ctx context.Context, format string, query string, args ...any) (io.ReadCloser, error) {
+	ex, err := c.queryFormat(format, query)
+	if ex != nil {
+		select {
+		case <-time.After(ex.delay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return io.NopCloser(bytes.NewReader(ex.data)), nil
+}
+
+func (c *clickhousemock) queryFormat(format, query string) (*ExpectedQueryFormat, error) {
+	c.drv.Lock()
+	defer c.drv.Unlock()
+
+	var expected *ExpectedQueryFormat
+	var fulfilled int
+	var ok bool
+
+	for _, next := range c.expected {
+		next.Lock()
+		if next.fulfilled() {
+			next.Unlock()
+			fulfilled++
+			continue
+		}
+
+		if c.ordered {
+			if expected, ok = next.(*ExpectedQueryFormat); ok {
+				break
+			}
+
+			next.Unlock()
+			return nil, fmt.Errorf("call to QueryFormat with format '%s' and query '%s', was not expected, next expectation is: %s", format, query, next)
+		}
+
+		if pr, ok := next.(*ExpectedQueryFormat); ok {
+			if pr.expectFormat == format && c.queryMatcherFunc().Match(pr.expectSQL, query) == nil {
+				expected = pr
+				break
+			}
+		}
+		next.Unlock()
+	}
+
+	if expected == nil {
+		msg := "call to QueryFormat with format '%s' and query '%s' was not expected"
+		if fulfilled == len(c.expected) {
+			msg = "all expectations were already fulfilled, " + msg
+		}
+		return nil, fmt.Errorf(msg, format, query)
+	}
+	defer expected.Unlock()
+	if expected.expectFormat != format {
+		return nil, fmt.Errorf("QueryFormat: expected format '%s', but got '%s'", expected.expectFormat, format)
+	}
+	if err := c.queryMatcherFunc().Match(expected.expectSQL, query); err != nil {
+		return nil, fmt.Errorf("QueryFormat: %v", err)
+	}
+
+	expected.triggered = true
+	return expected, expected.err
+}
+
+func (c *clickhousemock) ExpectInsertFormat(expectedFormat, expectedSQL string) *ExpectedInsertFormat {
+	e := &ExpectedInsertFormat{}
+	e.expectFormat = expectedFormat
+	e.expectSQL = expectedSQL
+	c.expected = append(c.expected, e)
+	return e
+}
+
+// InsertFormat meets https://pkg.go.dev/github.com/ClickHouse/clickhouse-go/v2/lib/driver#Conn interface
+func (c *clickhousemock) InsertFormat(ctx context.Context, format string, query string, data io.Reader) error {
+	var payload []byte
+	if data != nil {
+		var err error
+		if payload, err = io.ReadAll(data); err != nil {
+			return fmt.Errorf("InsertFormat: reading data: %w", err)
+		}
+	}
+
+	ex, err := c.insertFormat(format, query, payload)
+	if ex != nil {
+		select {
+		case <-time.After(ex.delay):
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return err
+}
+
+func (c *clickhousemock) insertFormat(format, query string, payload []byte) (*ExpectedInsertFormat, error) {
+	c.drv.Lock()
+	defer c.drv.Unlock()
+
+	var expected *ExpectedInsertFormat
+	var fulfilled int
+	var ok bool
+
+	for _, next := range c.expected {
+		next.Lock()
+		if next.fulfilled() {
+			next.Unlock()
+			fulfilled++
+			continue
+		}
+
+		if c.ordered {
+			if expected, ok = next.(*ExpectedInsertFormat); ok {
+				break
+			}
+
+			next.Unlock()
+			return nil, fmt.Errorf("call to InsertFormat with format '%s' and query '%s', was not expected, next expectation is: %s", format, query, next)
+		}
+
+		if pr, ok := next.(*ExpectedInsertFormat); ok {
+			if pr.expectFormat == format && c.queryMatcherFunc().Match(pr.expectSQL, query) == nil {
+				expected = pr
+				break
+			}
+		}
+		next.Unlock()
+	}
+
+	if expected == nil {
+		msg := "call to InsertFormat with format '%s' and query '%s' was not expected"
+		if fulfilled == len(c.expected) {
+			msg = "all expectations were already fulfilled, " + msg
+		}
+		return nil, fmt.Errorf(msg, format, query)
+	}
+	defer expected.Unlock()
+	if expected.expectFormat != format {
+		return nil, fmt.Errorf("InsertFormat: expected format '%s', but got '%s'", expected.expectFormat, format)
+	}
+	if err := c.queryMatcherFunc().Match(expected.expectSQL, query); err != nil {
+		return nil, fmt.Errorf("InsertFormat: %v", err)
+	}
+	if expected.expectData != nil && !bytes.Equal(expected.expectData, payload) {
+		return nil, fmt.Errorf("InsertFormat: payload does not match expected data")
 	}
 
 	expected.triggered = true

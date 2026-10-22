@@ -680,3 +680,68 @@ func (e *ExpectedContributors) WillReturnContributors(contributors ...string) *E
 func (e *ExpectedContributors) String() string {
 	return "Contributors() - Mocked"
 }
+
+// ExpectedQueryFormat is used to manage *driver.Conn.QueryFormat expectations.
+// Returned by *clickhousemock.ExpectQueryFormat.
+type ExpectedQueryFormat struct {
+	commonExpectation
+	expectFormat string
+	expectSQL    string
+	data         []byte
+	delay        time.Duration
+}
+
+// WillReturnData allows to set the raw format bytes streamed by the expected *Conn.QueryFormat action.
+func (e *ExpectedQueryFormat) WillReturnData(data []byte) *ExpectedQueryFormat {
+	e.data = data
+	return e
+}
+
+// WillReturnError allows to set an error for the expected *Conn.QueryFormat action.
+func (e *ExpectedQueryFormat) WillReturnError(err error) *ExpectedQueryFormat {
+	e.err = err
+	return e
+}
+
+// WillDelay allows to set a delay for the expected *Conn.QueryFormat action.
+func (e *ExpectedQueryFormat) WillDelay(d time.Duration) *ExpectedQueryFormat {
+	e.delay = d
+	return e
+}
+
+func (e *ExpectedQueryFormat) String() string {
+	return fmt.Sprintf("QueryFormat(%s, %s)", e.expectFormat, e.expectSQL)
+}
+
+// ExpectedInsertFormat is used to manage *driver.Conn.InsertFormat expectations.
+// Returned by *clickhousemock.ExpectInsertFormat.
+type ExpectedInsertFormat struct {
+	commonExpectation
+	expectFormat string
+	expectSQL    string
+	expectData   []byte
+	delay        time.Duration
+}
+
+// WithData allows to set the payload expected to be streamed to the *Conn.InsertFormat action.
+// If not set, any payload is accepted.
+func (e *ExpectedInsertFormat) WithData(data []byte) *ExpectedInsertFormat {
+	e.expectData = data
+	return e
+}
+
+// WillReturnError allows to set an error for the expected *Conn.InsertFormat action.
+func (e *ExpectedInsertFormat) WillReturnError(err error) *ExpectedInsertFormat {
+	e.err = err
+	return e
+}
+
+// WillDelay allows to set a delay for the expected *Conn.InsertFormat action.
+func (e *ExpectedInsertFormat) WillDelay(d time.Duration) *ExpectedInsertFormat {
+	e.delay = d
+	return e
+}
+
+func (e *ExpectedInsertFormat) String() string {
+	return fmt.Sprintf("InsertFormat(%s, %s)", e.expectFormat, e.expectSQL)
+}
