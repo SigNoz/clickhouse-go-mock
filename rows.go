@@ -43,26 +43,39 @@ type Rows struct {
 	closeErr  error
 }
 
-func (r *Rows) Next() bool {
-	return r.pos < len(r.values)
+// RowError makes Scan of the given zero-based row return err.
+func (r *Rows) RowError(row int, err error) *Rows {
+	if r.nextErr == nil {
+		r.nextErr = map[int]error{}
+	}
+	r.nextErr[row] = err
+	return r
 }
 
-func (r *Rows) Scan(dest ...any) error {
+// Next advances to the next row, like clickhouse-go: a row can be skipped by
+// calling Next without Scan.
+func (r *Rows) Next() bool {
 	if r.pos >= len(r.values) {
-		return io.EOF
-	}
-	if err := scan(r.block, r.pos, dest...); err != nil {
-		return err
-	}
-	if err := r.nextErr[r.pos]; err != nil {
-		return err
+		return false
 	}
 	r.pos++
-	return nil
+	return true
+}
+
+// Scan reads the row Next advanced to.
+func (r *Rows) Scan(dest ...any) error {
+	if r.pos == 0 || r.pos > len(r.values) {
+		return io.EOF
+	}
+	row := r.pos - 1
+	if err := scan(r.block, row, dest...); err != nil {
+		return err
+	}
+	return r.nextErr[row]
 }
 
 func (r *Rows) ScanStruct(dest any) error {
-	if r.pos >= len(r.values) {
+	if r.pos == 0 || r.pos > len(r.values) {
 		return io.EOF
 	}
 
