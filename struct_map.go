@@ -33,7 +33,7 @@ type structMap struct {
 
 func (m *structMap) Map(op string, columns []string, s any, ptr bool) ([]any, error) {
 	v := reflect.ValueOf(s)
-	if v.Kind() != reflect.Ptr {
+	if v.Kind() != reflect.Pointer {
 		return nil, &OpError{
 			Op:  op,
 			Err: fmt.Errorf("must pass a pointer, not a value, to %s destination", op),
@@ -46,7 +46,7 @@ func (m *structMap) Map(op string, columns []string, s any, ptr bool) ([]any, er
 		}
 	}
 	t := reflect.TypeOf(s)
-	if v = reflect.Indirect(v); t.Kind() == reflect.Ptr {
+	if v = reflect.Indirect(v); t.Kind() == reflect.Pointer {
 		t = t.Elem()
 	}
 	if v.Kind() != reflect.Struct {
@@ -102,7 +102,7 @@ func structIdx(t reflect.Type) map[string][]int {
 		}
 		switch {
 		case f.Anonymous:
-			if f.Type.Kind() != reflect.Ptr {
+			if f.Type.Kind() != reflect.Pointer {
 				for k, idx := range structIdx(f.Type) {
 					fields[k] = append(f.Index, idx...)
 				}

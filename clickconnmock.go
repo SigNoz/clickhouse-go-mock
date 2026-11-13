@@ -641,7 +641,7 @@ func (c *clickhousemock) ExpectSelect(expectedSQL string) *ExpectedSelect {
 func (c *clickhousemock) Select(ctx context.Context, dest any, query string, args ...any) error {
 	// Implementation based on that of Select in clickhouse-go https://github.com/ClickHouse/clickhouse-go/blob/main/scan.go#L29
 	dstSlicePtr := reflect.ValueOf(dest)
-	if dstSlicePtr.Kind() != reflect.Ptr {
+	if dstSlicePtr.Kind() != reflect.Pointer {
 		return &OpError{
 			Op:  "Select",
 			Err: fmt.Errorf("must pass a pointer, not a value, to Select destination"),
