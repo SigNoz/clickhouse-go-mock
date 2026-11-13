@@ -673,7 +673,7 @@ func (c *clickhousemock) Select(ctx context.Context, dest any, query string, arg
 				return err
 			}
 
-			defer ex.rows.Close()
+			defer func() { _ = ex.rows.Close() }()
 			for ex.rows.Next() {
 				elem := reflect.New(dstSliceElType)
 				if err := ex.rows.ScanStruct(elem.Interface()); err != nil {
