@@ -125,7 +125,7 @@ func (r *Row) ScanStruct(dest any) error {
 		return r.err
 	}
 	if !r.rows.Next() {
-		r.rows.Close()
+		_ = r.rows.Close()
 		if err := r.rows.Err(); err != nil {
 			return err
 		}
@@ -142,7 +142,7 @@ func (r *Row) Scan(dest ...any) error {
 		return r.err
 	}
 	if !r.rows.Next() {
-		r.rows.Close()
+		_ = r.rows.Close()
 		if err := r.rows.Err(); err != nil {
 			return err
 		}

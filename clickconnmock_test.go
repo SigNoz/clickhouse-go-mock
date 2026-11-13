@@ -40,7 +40,9 @@ func TestPrepareExpectations(t *testing.T) {
 		t.Errorf("an error '%s' was not expected when preparing a batch statement", err)
 	}
 
-	batch.Append(1, "title", "content")
+	if err := batch.Append(1, "title", "content"); err != nil {
+		t.Errorf("an error '%s' was not expected when appending to batch", err)
+	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("there were unfulfilled expectations: %s", err)
@@ -654,8 +656,10 @@ func TestRowsNextSkipsWithoutScan(t *testing.T) {
 	t.Parallel()
 	rows := NewRows([]ColumnType{{Type: "Int32", Name: "id"}}, [][]any{{int32(1)}, {int32(2)}, {int32(3)}})
 
-	if !rows.Next() || !rows.Next() || !rows.Next() {
-		t.Fatal("expected three rows")
+	for i := range 3 {
+		if !rows.Next() {
+			t.Fatalf("expected row %d", i+1)
+		}
 	}
 	var id int32
 	if err := rows.Scan(&id); err != nil {
