@@ -649,3 +649,39 @@ func TestQueryReturnRowCustomError(t *testing.T) {
 		t.Errorf("expected error to be some error, but got %s", err)
 	}
 }
+
+func TestRowsNextSkipsWithoutScan(t *testing.T) {
+	t.Parallel()
+	rows := NewRows([]ColumnType{{Type: "Int32", Name: "id"}}, [][]any{{int32(1)}, {int32(2)}, {int32(3)}})
+
+	if !rows.Next() || !rows.Next() || !rows.Next() {
+		t.Fatal("expected three rows")
+	}
+	var id int32
+	if err := rows.Scan(&id); err != nil {
+		t.Fatalf("an error '%s' was not expected when scanning a row", err)
+	}
+	if id != 3 {
+		t.Errorf("expected id to be 3 after skipping two rows, but got %d", id)
+	}
+	if rows.Next() {
+		t.Error("expected no more rows")
+	}
+}
+
+func TestRowsRowError(t *testing.T) {
+	t.Parallel()
+	rowErr := errors.New("row 1 failed")
+	rows := NewRows([]ColumnType{{Type: "Int32", Name: "id"}}, [][]any{{int32(1)}, {int32(2)}}).RowError(1, rowErr)
+
+	var id int32
+	if !rows.Next() || rows.Scan(&id) != nil {
+		t.Fatal("expected row 0 to scan")
+	}
+	if !rows.Next() {
+		t.Fatal("expected row 1")
+	}
+	if err := rows.Scan(&id); !errors.Is(err, rowErr) {
+		t.Errorf("expected row 1 to fail with %q, but got %v", rowErr, err)
+	}
+}
