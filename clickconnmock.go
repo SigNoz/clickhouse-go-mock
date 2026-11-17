@@ -74,6 +74,10 @@ type ClickConnMockCommon interface {
 	// the *ExpectedExec allows to mock database response
 	ExpectExec(expectedSQL string) *ExpectedExec
 
+	ExpectQueryFormat(format string, expectedSQL string) *ExpectedQueryFormat
+
+	ExpectInsertFormat(format string, expectedSQL string) *ExpectedInsertFormat
+
 	// ExpectPrepareBatch expects PrepareBatch() to be called with expectedSQL query.
 	// the *ExpectedPrepareBatch allows to mock database response.
 	// Note that you may expect Append() or AppendStruct() on the *ExpectedPrepareBatch
